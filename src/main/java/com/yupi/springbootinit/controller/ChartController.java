@@ -64,7 +64,7 @@ public class ChartController {
     private final static Gson GSON = new Gson();
 
     /**
-     * 图表智能分析
+     * 图表智能分析，同步
      *
      * @param multipartFile
      * @param multipartFile
@@ -77,6 +77,23 @@ public class ChartController {
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         BiResponse biResponse = chartService.genChartByAi(multipartFile, genChartByAiRequest, request);
+        return ResultUtils.success(biResponse);
+
+    }
+
+    /**
+     * 图表智能分析，异步
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async")
+    @ApiOperation("通过AI生成图表")
+    public BaseResponse<BiResponse> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
+                                                 GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+
+        BiResponse biResponse = chartService.genChartByAiAsync(multipartFile, genChartByAiRequest, request);
         return ResultUtils.success(biResponse);
 
     }
@@ -208,8 +225,9 @@ public class ChartController {
         long size = chartQueryRequest.getPageSize();
         // 限制爬虫
         ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
-        Page<Chart> chartPage = chartService.page(new Page<>(current, size),
-                getQueryWrapper(chartQueryRequest));
+        Page<Chart> chartPage = chartService.getChartsByPage(current, size, chartQueryRequest);
+//        Page<Chart> chartPage = chartService.page(new Page<>(current, size),
+//                getQueryWrapper(chartQueryRequest));
         return ResultUtils.success(chartPage);
     }
 
