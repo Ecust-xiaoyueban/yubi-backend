@@ -25,7 +25,7 @@ spring:
   # todo 需替换配置，然后取消注释
   redis:
     database: 1
-    host: localhost
+    host: 139.196.34.193
     port: 6379
     timeout: 5000
     password: 123456
@@ -43,8 +43,9 @@ spring:
   rabbitmq:
     host: 139.196.34.193
     port: 5672
-    password: 123
     username: yubi
+    password: 123
+
 server:
   address: 0.0.0.0
   port: 8080

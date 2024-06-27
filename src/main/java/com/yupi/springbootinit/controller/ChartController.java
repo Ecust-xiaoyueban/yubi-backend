@@ -93,7 +93,7 @@ public class ChartController {
     public BaseResponse<BiResponse> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
                                                  GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
-        BiResponse biResponse = chartService.genChartByAiAsync(multipartFile, genChartByAiRequest, request);
+        BiResponse biResponse = chartService.genChartByAiMQ(multipartFile, genChartByAiRequest, request);
         return ResultUtils.success(biResponse);
 
     }

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.springbootinit.common.ErrorCode;
+import com.yupi.springbootinit.constant.MQConstants;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.manager.AiManager;
@@ -18,7 +19,9 @@ import com.yupi.springbootinit.service.ChartService;
 import com.yupi.springbootinit.mapper.ChartMapper;
 import com.yupi.springbootinit.service.UserService;
 import com.yupi.springbootinit.utils.ExcelUtils;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +37,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 智能图表分析
  */
 @Service
+@RequiredArgsConstructor
 public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements ChartService{
 
     @Autowired
@@ -51,8 +55,72 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
 
+    private final RabbitTemplate rabbitTemplate;
+
     /**
-     * 智能生成图表，异步
+     * 智能生成图表，异步(MQ)
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @Override
+    public BiResponse genChartByAiMQ(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        //参数检验
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+
+        //校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        //检验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过1M");
+        //检验文件后缀
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("xlsx", "xls");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix),ErrorCode.PARAMS_ERROR, "文件后缀非法");
+        //获取用户id
+        User loginUser = userService.getLoginUser(request);
+
+        //限流判断
+        redisLimiterManager.doRateLimit("genChartByAi" + String.valueOf(loginUser.getId()));
+
+        //用户输入
+        StringBuilder userInput = new StringBuilder();
+        String userGoal = goal;
+        if(StringUtils.isNotBlank(chartType)){
+            userGoal  = ",请使用" + chartType;
+        }
+        userInput.append("分析需求: ").append(userGoal).append("\n");
+
+        userInput.append(goal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        //压缩后的数据
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append("数据： ").append(csvData).append("\n");
+
+        //插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setStatus("wait");
+        chart.setUserId(loginUser.getId());
+        chartMapper.insert(chart);
+
+        rabbitTemplate.convertAndSend(MQConstants.CHART_EXCHANGE_NAME, MQConstants.CHART_KEY, chart);
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(chart.getId());
+        return  biResponse;
+    }
+
+    /**
+     * 智能生成图表，异步(线程池)
      * @param multipartFile
      * @param genChartByAiRequest
      * @param request
@@ -226,6 +294,7 @@ public class ChartServiceImpl extends ServiceImpl<ChartMapper, Chart> implements
         chart.setGenChart(genChart);
         chart.setGenResult(genResult);
         chart.setUserId(loginUser.getId());
+        chart.setStatus("succeed");
         int saveResult = chartMapper.insert(chart);
         BiResponse biResponse = new BiResponse();
         biResponse.setGenChart(genChart);

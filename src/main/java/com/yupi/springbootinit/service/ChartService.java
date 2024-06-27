@@ -24,13 +24,22 @@ public interface ChartService extends IService<Chart> {
     BiResponse genChartByAi(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, HttpServletRequest request);
 
     /**
-     * 智能生成图表，异步
+     * 智能生成图表，异步（线程池）
      * @param multipartFile
      * @param genChartByAiRequest
      * @param request
      * @return
      */
     BiResponse genChartByAiAsync(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, HttpServletRequest request);
+
+    /**
+     * 智能生成图表，异步（MQ）
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    BiResponse genChartByAiMQ(MultipartFile multipartFile, GenChartByAiRequest genChartByAiRequest, HttpServletRequest request);
 
     /**
      * 分页查询我的图表
